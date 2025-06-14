@@ -1,4 +1,4 @@
-name: Build Perl with Modules for OpenWrt 24.10.1 x86_64 (GCC 13.3.0)
+name: Build Perl CGI + MD5 for OpenWrt 24.10.1 x86_64
 
 on:
   workflow_dispatch:
@@ -15,47 +15,36 @@ jobs:
             git subversion unzip wget python3 python3-venv python3-pip \
             rsync file zstd
 
-      - name: Download and extract OpenWrt SDK (GCC 13.3.0)
+      - name: Download and extract OpenWrt SDK
         run: |
           wget https://downloads.openwrt.org/releases/24.10.1/targets/x86/64/openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           tar --use-compress-program=unzstd -xf openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           SDK_DIR=$(find . -maxdepth 1 -type d -name "openwrt-sdk-24.10.1-*")
           mv "$SDK_DIR" sdk
 
-      - name: Setup Feeds and Perl Config
+      - name: Setup feeds and config
         working-directory: sdk
         run: |
           echo "src-git packages https://github.com/openwrt/packages" > feeds.conf
-          echo "src-git luci https://github.com/openwrt/luci" >> feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
           cat <<EOF > .config
-           CONFIG_PACKAGE_perl=y
-           CONFIG_PACKAGE_perlbase-autoloader=y
-           CONFIG_PACKAGE_perlbase-bytes=y
-           CONFIG_PACKAGE_perlbase-carp=y
-           CONFIG_PACKAGE_perlbase-cgi=y
-           CONFIG_PACKAGE_perlbase-constant=y
-           CONFIG_PACKAGE_perlbase-digest=y
-           CONFIG_PACKAGE_perlbase-md5=y
-           CONFIG_PACKAGE_perlbase-exporter=y
-           CONFIG_PACKAGE_perlbase-strict=y
-           CONFIG_PACKAGE_perlbase-vars=y
-           CONFIG_PACKAGE_perlbase-warnings=y
+            CONFIG_PACKAGE_perlbase-cgi=y
+            CONFIG_PACKAGE_perlbase-md5=y
           EOF
-
           make defconfig
 
-      - name: Build Perl and All Modules from .config
+      - name: Build CGI and MD5
         working-directory: sdk
         run: |
-          make -j$(nproc) package/perl/compile V=s
-     
-      - name: Upload .ipk Results
+          make package/feeds/packages/perlbase-cgi/compile V=s
+          make package/feeds/packages/perlbase-md5/compile V=s
+
+      - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
-          name: perl-ipks
+          name: perl-cgi-md5
           path: |
-            sdk/bin/packages/x86_64/packages/perl_*.ipk
-            sdk/bin/packages/x86_64/packages/perlbase-*.ipk
+            sdk/bin/packages/x86_64/packages/perlbase-cgi_*.ipk
+            sdk/bin/packages/x86_64/packages/perlbase-md5_*.ipk
