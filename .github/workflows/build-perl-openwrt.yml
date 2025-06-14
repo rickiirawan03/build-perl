@@ -1,4 +1,4 @@
-name: Build Perl with Modules for OpenWrt 24.10.1 x86_64
+name: Build Perl with Modules for OpenWrt 24.10.1 x86_64 (GCC 13.3.0)
 
 on:
   workflow_dispatch:
@@ -12,28 +12,24 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex gawk \
-            git subversion unzip wget python3 python3-pip python3-setuptools \
-            rsync file
+            git subversion unzip wget python3 python3-venv python3-pip \
+            rsync file zstd
 
-      - name: Download and extract OpenWrt SDK
+      - name: Download and extract OpenWrt SDK (GCC 13.3.0)
         run: |
-          wget https://downloads.openwrt.org/releases/24.10.1/targets/x86/64/openwrt-sdk-24.10.1-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-          tar -xf openwrt-sdk-24.10.1-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-          mv openwrt-sdk-24.10.1-x86-64* sdk
+          wget https://downloads.openwrt.org/releases/24.10.1/targets/x86/64/openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          tar --use-compress-program=unzstd -xf openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          SDK_DIR=$(find . -maxdepth 1 -type d -name "openwrt-sdk-24.10.1-*")
+          mv "$SDK_DIR" sdk
 
-      - name: Prepare SDK
+      - name: Setup Feeds and Perl Config
         working-directory: sdk
         run: |
           echo "src-git packages https://github.com/openwrt/packages" > feeds.conf
           echo "src-git luci https://github.com/openwrt/luci" >> feeds.conf
-          echo "src-git routing https://git.openwrt.org/feed/routing.git" >> feeds.conf
-          echo "src-git telephony https://git.openwrt.org/feed/telephony.git" >> feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Create .config for Perl and modules
-        working-directory: sdk
-        run: |
           cat <<EOF > .config
            CONFIG_PACKAGE_perl=y
            CONFIG_PACKAGE_perlbase-autoloader=y
@@ -48,9 +44,10 @@ jobs:
            CONFIG_PACKAGE_perlbase-vars=y
            CONFIG_PACKAGE_perlbase-warnings=y
           EOF
+
           make defconfig
 
-      - name: Compile Perl packages
+      - name: Build Perl and Modules
         working-directory: sdk
         run: |
           make package/perl/compile V=s
@@ -58,10 +55,12 @@ jobs:
           make package/feeds/packages/perlbase-digest/compile V=s
           make package/feeds/packages/perlbase-md5/compile V=s
           make package/feeds/packages/perlbase-strict/compile V=s
+          make package/feeds/packages/perlbase-warnings/compile V=s
 
-      - name: Upload Perl IPK packages
+      - name: Upload .ipk Results
         uses: actions/upload-artifact@v4
         with:
           name: perl-ipks
           path: |
             sdk/bin/packages/x86_64/packages/perl_*.ipk
+            sdk/bin/packages/x86_64/packages/perlbase-*.ipk
