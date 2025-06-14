@@ -35,19 +35,19 @@ jobs:
         working-directory: sdk
         run: |
           cat <<EOF > .config
-CONFIG_PACKAGE_perl=y
-CONFIG_PACKAGE_perlbase-autoloader=y
-CONFIG_PACKAGE_perlbase-bytes=y
-CONFIG_PACKAGE_perlbase-carp=y
-CONFIG_PACKAGE_perlbase-cgi=y
-CONFIG_PACKAGE_perlbase-constant=y
-CONFIG_PACKAGE_perlbase-digest=y
-CONFIG_PACKAGE_perlbase-md5=y
-CONFIG_PACKAGE_perlbase-exporter=y
-CONFIG_PACKAGE_perlbase-strict=y
-CONFIG_PACKAGE_perlbase-vars=y
-CONFIG_PACKAGE_perlbase-warnings=y
-EOF
+           CONFIG_PACKAGE_perl=y
+           CONFIG_PACKAGE_perlbase-autoloader=y
+           CONFIG_PACKAGE_perlbase-bytes=y
+           CONFIG_PACKAGE_perlbase-carp=y
+           CONFIG_PACKAGE_perlbase-cgi=y
+           CONFIG_PACKAGE_perlbase-constant=y
+           CONFIG_PACKAGE_perlbase-digest=y
+           CONFIG_PACKAGE_perlbase-md5=y
+           CONFIG_PACKAGE_perlbase-exporter=y
+           CONFIG_PACKAGE_perlbase-strict=y
+           CONFIG_PACKAGE_perlbase-vars=y
+           CONFIG_PACKAGE_perlbase-warnings=y
+          EOF
           make defconfig
 
       - name: Compile Perl packages
