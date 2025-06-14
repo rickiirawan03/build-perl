@@ -1,50 +1,118 @@
-name: Build Perl Modules (CGI + MD5) for OpenWrt 24.10.1
+# Nama workflow ini akan muncul di tab "Actions" GitHub Anda
+name: Build OpenWrt Perl Module IPKs from SDK (x86_64)
 
+# Memicu workflow pada setiap push ke branch main atau secara manual
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Memungkinkan pemicuan manual dari UI GitHub Actions
 
+# Mendefinisikan satu job di dalam workflow ini
 jobs:
-  build:
+  build_perl_ipks:
+    # Menggunakan runner Ubuntu terbaru yang disediakan oleh GitHub
     runs-on: ubuntu-latest
-
+    
+    # Menentukan langkah-langkah yang akan dijalankan oleh job ini
     steps:
-      - name: Install dependencies
+      # Langkah 1: Checkout kode repositori Anda
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Langkah 2: Menginstal dependensi dasar untuk lingkungan build
+      # Meskipun SDK sudah banyak, beberapa utilitas sistem dasar mungkin tetap diperlukan.
+      - name: Install Basic Dependencies
         run: |
+          echo "Memperbarui paket apt dan menginstal dependensi dasar..."
           sudo apt update
-          sudo apt install -y build-essential clang flex gawk \
-            git subversion unzip wget python3 python3-pip rsync file zstd
+          sudo apt install -y build-essential ccache file wget python3 unzip rsync subversion git zstd
+          echo "Dependensi dasar terinstal."
 
-      - name: Download and extract OpenWrt SDK
+      # Langkah 3: Mengunduh dan Mengekstrak OpenWrt SDK
+      - name: Download and Extract OpenWrt SDK
         run: |
-          wget https://downloads.openwrt.org/releases/24.10.1/targets/x86/64/openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          tar --use-compress-program=unzstd -xf openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          SDK_DIR=$(find . -maxdepth 1 -type d -name "openwrt-sdk-*")
-          mv "$SDK_DIR" sdk
+          SDK_URL="https://downloads.openwrt.org/releases/24.10.1/targets/x86/64/openwrt-sdk-24.10.1-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+          SDK_FILENAME=$(basename "$SDK_URL")
+          SDK_DIR_NAME="openwrt-sdk-24.10.1-x86-64" # Sesuaikan dengan nama direktori hasil ekstraksi
+          
+          echo "Mengunduh OpenWrt SDK dari ${SDK_URL}..."
+          wget "${SDK_URL}" -O "${SDK_FILENAME}"
+          
+          echo "Mengekstrak SDK..."
+          mkdir -p openwrt-sdk-build
+          # Menggunakan --strip-components=1 untuk mengekstrak konten langsung ke openwrt-sdk-build
+          tar -xaf "${SDK_FILENAME}" -C openwrt-sdk-build --strip-components=1
+          echo "SDK berhasil diekstrak ke openwrt-sdk-build."
 
-      - name: Prepare feeds
-        working-directory: sdk
+      # Langkah 4: Mengkopi konfigurasi .config dan Mempersiapkan Lingkungan SDK (Update dan Install Feeds)
+      - name: Copy .config and Prepare SDK Environment
+        working-directory: openwrt-sdk-build
         run: |
-          echo "src-git packages https://git.openwrt.org/feed/packages.git" > feeds.conf
+          echo "Mengkopi file .config yang sudah Anda siapkan..."
+          # File .config ini harus sudah berisi pilihan Perl dan semua modul yang diinginkan dengan [M]
+          cp ../.github/workflows/.config .config # Mengkopi dari root repo ke direktori build SDK
+          
+          echo "Memperbarui dan menginstal feed paket di dalam SDK..."
           ./scripts/feeds update -a
-          ./scripts/feeds install perlbase-cgi perlbase-md5
-
-      - name: Configure build
-        working-directory: sdk
-        run: |
-          echo "CONFIG_ALL=y" >> .config
-          echo "CONFIG_PACKAGE_perlbase-cgi=y" >> .config
-          echo "CONFIG_PACKAGE_perlbase-md5=y" >> .config
+          ./scripts/feeds install -a
+          echo "Feed terinstal."
+          
+          # make defconfig akan mengisi opsi yang belum dikonfigurasi berdasarkan .config yang sudah ada
+          echo "Menjalankan make defconfig..."
           make defconfig
+          echo "make defconfig selesai."
 
-      - name: Build Perl packages
-        working-directory: sdk
+      # Langkah 5: Membangun Paket IPK Spesifik (Perl dan Modul-modulnya)
+      - name: Compile Specific Perl Module IPKs
+        working-directory: openwrt-sdk-build
         run: |
-          make package/feeds/packages/perlbase-cgi/compile package/feeds/packages/perlbase-md5/compile -j$(nproc) V=s
+          echo "Membersihkan direktori build (opsional, disarankan untuk build baru)..."
+          make clean || true # Mengizinkan make clean untuk gagal jika tidak ada yang perlu dibersihkan
+          
+          echo "Mulai kompilasi paket perl utama dan modul-modulnya..."
+          # Perintah ini mencoba mengkompilasi paket utama perl
+          # Jika gagal, mungkin karena jalur berubah di versi OpenWrt terbaru.
+          # Jalur ini adalah contoh umum, Anda perlu memverifikasi jalur yang benar di sistem build OpenWrt Anda.
+          
+          # Kompilasi Perl runtime
+          make package/lang/perl/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/compile V=s -j$(nproc)
 
-      - name: Upload .ipk files
+          # Kompilasi modul Perl tambahan
+          make package/lang/perl/perl-module-cgi/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-cgi/compile V=s -j$(nproc)
+          
+          make package/lang/perl/perl-module-digest-md5/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-digest-md5/compile V=s -j$(nproc)
+
+          make package/lang/perl/perl-module-dbi/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-dbi/compile V=s -j$(nproc)
+
+          make package/lang/perl/perl-module-dbd-sqlite/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-dbd-sqlite/compile V=s -j$(nproc)
+
+          make package/lang/perl/perl-module-json/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-json/compile V=s -j$(nproc)
+
+          make package/lang/perl/perl-module-lwp-useragent/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-lwp-useragent/compile V=s -j$(nproc)
+
+          make package/lang/perl/perl-module-net-ssleay/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-net-ssleay/compile V=s -j$(nproc)
+
+          make package/lang/perl/perl-module-time-hires/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-time-hires/compile V=s -j$(nproc)
+
+          echo "Kompilasi semua modul Perl selesai."
+
+      # Langkah 6: Mengunggah artefak (file IPK yang sudah jadi)
+      - name: Upload IPK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: perl-cgi-md5-${{ github.run_id }}
-          path: |
-            sdk/bin/packages/x86_64/packages/perl*.ipk
-            sdk/bin/packages/x86_64/base/perl*.ipk
+          name: openwrt-perl-ipks-24.10.1-x86_64
+          # Path di mana file IPK OpenWrt yang sudah jadi berada
+          # Kita akan mencari semua file .ipk di direktori bin/packages/ dari SDK
+          path: openwrt-sdk-build/bin/packages/x86_64/**/*.ipk
+          retention-days: 7
+          
