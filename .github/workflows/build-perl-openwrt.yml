@@ -47,16 +47,11 @@ jobs:
 
           make defconfig
 
-      - name: Build Perl and Modules
+      - name: Build Perl and All Modules from .config
         working-directory: sdk
         run: |
-          make package/perl/compile V=s
-          make package/feeds/packages/perlbase-cgi/compile V=s
-          make package/feeds/packages/perlbase-digest/compile V=s
-          make package/feeds/packages/perlbase-md5/compile V=s
-          make package/feeds/packages/perlbase-strict/compile V=s
-          make package/feeds/packages/perlbase-warnings/compile V=s
-
+          make -j$(nproc) package/perl/compile V=s
+     
       - name: Upload .ipk Results
         uses: actions/upload-artifact@v4
         with:
