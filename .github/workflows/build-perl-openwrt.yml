@@ -1,0 +1,67 @@
+name: Build Perl with Modules for OpenWrt 24.10.1 x86_64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex gawk \
+            git subversion unzip wget python3 python3-distutils \
+            rsync file
+
+      - name: Download and extract OpenWrt SDK
+        run: |
+          wget https://downloads.openwrt.org/releases/24.10.1/targets/x86/64/openwrt-sdk-24.10.1-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          tar -xf openwrt-sdk-24.10.1-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+          mv openwrt-sdk-24.10.1-x86-64* sdk
+
+      - name: Prepare SDK
+        working-directory: sdk
+        run: |
+          echo "src-git packages https://github.com/openwrt/packages" > feeds.conf
+          echo "src-git luci https://github.com/openwrt/luci" >> feeds.conf
+          echo "src-git routing https://git.openwrt.org/feed/routing.git" >> feeds.conf
+          echo "src-git telephony https://git.openwrt.org/feed/telephony.git" >> feeds.conf
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Create .config for Perl and modules
+        working-directory: sdk
+        run: |
+          cat <<EOF > .config
+CONFIG_PACKAGE_perl=y
+CONFIG_PACKAGE_perlbase-autoloader=y
+CONFIG_PACKAGE_perlbase-bytes=y
+CONFIG_PACKAGE_perlbase-carp=y
+CONFIG_PACKAGE_perlbase-cgi=y
+CONFIG_PACKAGE_perlbase-constant=y
+CONFIG_PACKAGE_perlbase-digest=y
+CONFIG_PACKAGE_perlbase-md5=y
+CONFIG_PACKAGE_perlbase-exporter=y
+CONFIG_PACKAGE_perlbase-strict=y
+CONFIG_PACKAGE_perlbase-vars=y
+CONFIG_PACKAGE_perlbase-warnings=y
+EOF
+          make defconfig
+
+      - name: Compile Perl packages
+        working-directory: sdk
+        run: |
+          make package/perl/compile V=s
+          make package/feeds/packages/perlbase-cgi/compile V=s
+          make package/feeds/packages/perlbase-digest/compile V=s
+          make package/feeds/packages/perlbase-md5/compile V=s
+          make package/feeds/packages/perlbase-strict/compile V=s
+
+      - name: Upload Perl IPK packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: perl-ipks
+          path: |
+            sdk/bin/packages/x86_64/packages/perl_*.ipk
