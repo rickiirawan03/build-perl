@@ -21,7 +21,6 @@ jobs:
         uses: actions/checkout@v4
 
       # Langkah 2: Menginstal dependensi dasar untuk lingkungan build
-      # Meskipun SDK sudah banyak, beberapa utilitas sistem dasar mungkin tetap diperlukan.
       - name: Install Basic Dependencies
         run: |
           echo "Memperbarui paket apt dan menginstal dependensi dasar..."
@@ -41,7 +40,6 @@ jobs:
           
           echo "Mengekstrak SDK..."
           mkdir -p openwrt-sdk-build
-          # Menggunakan --strip-components=1 untuk mengekstrak konten langsung ke openwrt-sdk-build
           tar -xaf "${SDK_FILENAME}" -C openwrt-sdk-build --strip-components=1
           echo "SDK berhasil diekstrak ke openwrt-sdk-build."
 
@@ -50,15 +48,28 @@ jobs:
         working-directory: openwrt-sdk-build
         run: |
           echo "Mengkopi file .config yang sudah Anda siapkan..."
-          # File .config ini harus sudah berisi pilihan Perl dan semua modul yang diinginkan dengan [M]
-          cp ../.github/workflows/.config .config # Mengkopi dari root repo ke direktori build SDK
+          cp ../.github/workflows/.config .config
           
+          # DEBUGGING: Tampilkan isi .config untuk verifikasi
+          echo "--- Isi file .config (bagian relevan) ---"
+          cat .config | grep -E "CONFIG_TARGET|CONFIG_PACKAGE_perl|CONFIG_PACKAGE_coova-chilli" || true
+          echo "----------------------------------------"
+
           echo "Memperbarui dan menginstal feed paket di dalam SDK..."
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           echo "Feed terinstal."
           
-          # make defconfig akan mengisi opsi yang belum dikonfigurasi berdasarkan .config yang sudah ada
+          # DEBUGGING: Tampilkan struktur direktori 'package/lang/perl' dan 'package/feeds/packages/perl'
+          echo "--- Struktur direktori paket Perl setelah 'feeds install' ---"
+          echo "Isi 'package/lang/perl/':"
+          ls -la package/lang/perl/ || true
+          echo "Isi 'package/feeds/packages/perl/':"
+          ls -la package/feeds/packages/perl/ || true
+          echo "Mencari direktori 'perl-module-cgi' di bawah 'package/':"
+          find package/ -type d -name "perl-module-cgi" || true
+          echo "------------------------------------------------------------"
+
           echo "Menjalankan make defconfig..."
           make defconfig
           echo "make defconfig selesai."
@@ -76,33 +87,62 @@ jobs:
           # Jalur ini adalah contoh umum, Anda perlu memverifikasi jalur yang benar di sistem build OpenWrt Anda.
           
           # Kompilasi Perl runtime
+          echo "Mengkompilasi perl runtime..."
           make package/lang/perl/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl runtime. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl runtime selesai."
 
           # Kompilasi modul Perl tambahan
-          make package/lang/perl/perl-module-cgi/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-cgi/compile V=s -j$(nproc)
+          # Setiap baris di bawah ini akan mencoba kompilasi. Jika gagal, akan mencetak pesan error dan keluar.
           
+          echo "Mengkompilasi perl-module-cgi..."
+          make package/lang/perl/perl-module-cgi/compile V=s -j$(nproc) || \
+          make package/feeds/packages/perl/perl-module-cgi/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-cgi. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-cgi selesai."
+          
+          echo "Mengkompilasi perl-module-digest-md5..."
           make package/lang/perl/perl-module-digest-md5/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-digest-md5/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-digest-md5/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-digest-md5. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-digest-md5 selesai."
 
+          echo "Mengkompilasi perl-module-dbi..."
           make package/lang/perl/perl-module-dbi/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-dbi/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-dbi/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-dbi. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-dbi selesai."
 
+          echo "Mengkompilasi perl-module-dbd-sqlite..."
           make package/lang/perl/perl-module-dbd-sqlite/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-dbd-sqlite/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-dbd-sqlite/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-dbd-sqlite. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-dbd-sqlite selesai."
 
+          echo "Mengkompilasi perl-module-json..."
           make package/lang/perl/perl-module-json/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-json/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-json/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-json. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-json selesai."
 
+          echo "Mengkompilasi perl-module-lwp-useragent..."
           make package/lang/perl/perl-module-lwp-useragent/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-lwp-useragent/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-lwp-useragent/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-lwp-useragent. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-lwp-useragent selesai."
 
+          echo "Mengkompilasi perl-module-net-ssleay..."
           make package/lang/perl/perl-module-net-ssleay/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-net-ssleay/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-net-ssleay/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-net-ssleay. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-net-ssleay selesai."
 
+          echo "Mengkompilasi perl-module-time-hires..."
           make package/lang/perl/perl-module-time-hires/compile V=s -j$(nproc) || \
-          make package/feeds/packages/perl/perl-module-time-hires/compile V=s -j$(nproc)
+          make package/feeds/packages/perl/perl-module-time-hires/compile V=s -j$(nproc) || \
+          echo "ERROR: Gagal mengkompilasi perl-module-time-hires. Periksa logs di atas." && exit 1
+          echo "Kompilasi perl-module-time-hires selesai."
 
           echo "Kompilasi semua modul Perl selesai."
 
@@ -111,8 +151,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: openwrt-perl-ipks-24.10.1-x86_64
-          # Path di mana file IPK OpenWrt yang sudah jadi berada
-          # Kita akan mencari semua file .ipk di direktori bin/packages/ dari SDK
           path: openwrt-sdk-build/bin/packages/x86_64/**/*.ipk
           retention-days: 7
-          
+
