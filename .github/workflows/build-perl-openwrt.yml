@@ -12,7 +12,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex gawk \
-            git subversion unzip wget python3 python3-php python3-setuptools \
+            git subversion unzip wget python3 python3-pip python3-setuptools \
             rsync file
 
       - name: Download and extract OpenWrt SDK
