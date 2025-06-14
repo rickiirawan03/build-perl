@@ -1,4 +1,4 @@
-name: Build Perl CGI + MD5 Modules for OpenWrt 24.10.1 x86_64
+name: Build Perl Modules (CGI + MD5) for OpenWrt 24.10.1
 
 on:
   workflow_dispatch:
@@ -26,26 +26,25 @@ jobs:
         run: |
           echo "src-git packages https://git.openwrt.org/feed/packages.git" > feeds.conf
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          ./scripts/feeds install perlbase-cgi perlbase-md5
 
       - name: Configure build
         working-directory: sdk
         run: |
-          cat <<EOF >> .config
-           CONFIG_PACKAGE_perl=y
-           CONFIG_PACKAGE_perlbase-cgi=y
-           CONFIG_PACKAGE_perlbase-md5=y
-          EOF
+          echo "CONFIG_ALL=y" >> .config
+          echo "CONFIG_PACKAGE_perlbase-cgi=y" >> .config
+          echo "CONFIG_PACKAGE_perlbase-md5=y" >> .config
           make defconfig
 
-      - name: Build all Perl packages
+      - name: Build Perl packages
         working-directory: sdk
         run: |
-          make package/feeds/packages/perl/compile -j$(nproc) V=s
+          make package/feeds/packages/perlbase-cgi/compile package/feeds/packages/perlbase-md5/compile -j$(nproc) V=s
 
       - name: Upload .ipk files
         uses: actions/upload-artifact@v4
         with:
-          name: perl-cgi-md5
+          name: perl-cgi-md5-${{ github.run_id }}
           path: |
             sdk/bin/packages/x86_64/packages/perl*.ipk
+            sdk/bin/packages/x86_64/base/perl*.ipk
